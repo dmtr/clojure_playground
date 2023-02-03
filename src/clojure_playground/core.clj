@@ -1,10 +1,24 @@
 (ns clojure-playground.core
+  (:gen-class)
   (:require
     [clojure-playground.perceptron :refer [perceptron forward train-perceptron]]
-    [clojure.string :as str]))
+    [clojure.string :as str]
+    [clojure.tools.cli :refer [parse-opts]]))
 
 
 (def test-data-file "./data/test_data.txt")
+
+
+(def cli-options
+  [["-f" "--file FILE" "Path to data file"
+    :default test-data-file
+    :parse-fn #(if (str/blank? %) test-data-file %)
+    :validate [#(not (str/blank? %)) "File path cannot be blank"]]
+   ["-e" "--epochs EPOCHS" "Number of epochs"
+    :default 5
+    :parse-fn #(Integer/parseInt %)
+    :validate [#(>= % 1) "Number of epochs must be greater than 0"]]
+   ["-h" "--help"]])
 
 
 (defn load-data
@@ -31,26 +45,14 @@
              (load-data path))))
 
 
-(def data (get-data test-data-file))
-
-
 (defn train
   [model train-model-f all-x all-y epochs]
   (loop [n 0 res model]
-    (println [n res])
+    (println ["epoch" n "model" res])
     (if (= n epochs)
       res
       (let [updated (train-model-f res all-x all-y)]
         (recur (inc n) updated)))))
-
-
-(def all-x (map #(vector (first %) (second %)) data))
-
-(def all-y (map #(last %) data))
-
-(def trained (train (perceptron 2) train-perceptron all-x all-y 5))
-
-(forward trained [1.33,  2.03])
 
 
 ;; evaluate the results
@@ -61,4 +63,11 @@
     (/ correct (count all-y))))
 
 
-(compute-accuracy trained all-x all-y)
+(defn -main
+  [& args]
+  (let [options (:options (parse-opts args cli-options))
+        data (get-data (:file options))
+        all-x (map #(vector (first %) (second %)) data)
+        all-y (map #(last %) data)
+        trained (train (perceptron 2) train-perceptron all-x all-y (:epochs options))]
+    (println "Accuracy: " (compute-accuracy trained all-x all-y))))
